@@ -617,17 +617,27 @@ export default function Home() {
 
   useEffect(() => {
     if (activeTab === 'chat') {
-      const scrollContainer = chatContainerRef.current;
-      if (scrollContainer) {
-        // Use a small delay to allow DOM to finish layout
-        const timer = setTimeout(() => {
-          chatEndRef.current?.scrollIntoView({ 
-            behavior: messages.length <= 1 ? 'auto' : 'smooth', 
-            block: 'end' 
-          });
-        }, 50);
-        return () => clearTimeout(timer);
-      }
+      const startTime = Date.now();
+      const duration = 800; // Extended to 800ms to cover all heavy layout shifts
+
+      const lockToBottom = () => {
+        // ALWAYS re-fetch current ref because it might re-mount on tab switch
+        const container = chatContainerRef.current;
+        if (container) {
+          container.scrollTop = container.scrollHeight + 10000;
+        }
+        
+        // Secondary anchor sync
+        if (chatEndRef.current) {
+          chatEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
+        }
+
+        if (Date.now() - startTime < duration) {
+          requestAnimationFrame(lockToBottom);
+        }
+      };
+
+      requestAnimationFrame(lockToBottom);
     }
   }, [messages, isTyping, activeTab]);
 
