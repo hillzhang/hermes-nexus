@@ -617,18 +617,17 @@ export default function Home() {
 
   useEffect(() => {
     if (activeTab === 'chat') {
-      let attempts = 0;
-      const scrollInterval = setInterval(() => {
-        const container = chatContainerRef.current || document.getElementById('chat-scroll-container');
-        if (container) {
-          container.scrollTop = container.scrollHeight;
-          chatEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
-        }
-        attempts++;
-        if (attempts > 10) clearInterval(scrollInterval);
-      }, 50);
-
-      return () => clearInterval(scrollInterval);
+      const scrollContainer = chatContainerRef.current;
+      if (scrollContainer) {
+        // Use a small delay to allow DOM to finish layout
+        const timer = setTimeout(() => {
+          chatEndRef.current?.scrollIntoView({ 
+            behavior: messages.length <= 1 ? 'auto' : 'smooth', 
+            block: 'end' 
+          });
+        }, 50);
+        return () => clearTimeout(timer);
+      }
     }
   }, [messages, isTyping, activeTab]);
 
