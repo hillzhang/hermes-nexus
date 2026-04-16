@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  hermes-nexus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hermes-nexus
+    ports:
+      - "3001:3000"
+    volumes:
+      # 挂载宿主机的配置文件目录到容器
+      # 请确保将左侧路径修改为您真实的 ~/.hermes 物理路径
+      - ~/.hermes:/data
+    environment:
+      # 告诉 UI 访问容器内挂载的路径
+      - HERMES_CONFIG_PATH=/data/config.yaml
+      - NODE_ENV=production
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  default:
+    name: hermes-network
