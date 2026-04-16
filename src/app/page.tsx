@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-  Bot, Database, Terminal, Search, Layers, Settings, Cpu, Network, Activity, History, FolderOpen, Plus, Send, User, Box, ShieldAlert, Shield, ShieldCheck, Lock, Server, Save, X, Globe, Zap, Sun, Moon, Copy, Check, ChevronDown, Trash2
+  Bot, Database, Terminal, Search, Layers, Settings, Cpu, Network, Activity, History, FolderOpen, Plus, Send, User, Box, ShieldAlert, Shield, ShieldCheck, Lock, Server, Save, X, Globe, Zap, Sun, Moon, Copy, Check, ChevronDown, Trash2, Monitor, RefreshCw, HardDrive, Image as ImageIcon
 } from "lucide-react";
 import styles from "./page.module.css";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,6 +21,7 @@ interface Message {
   content: string;
   timestamp: string;
   model?: string;
+  image?: string | null;
 }
 
 const FINAL_NODES: Node[] = [
@@ -170,6 +171,15 @@ export default function Home() {
 
   const [isClient, setIsClient] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
+  const [showConfig, setShowConfig] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper to detect if a model name likely supports vision
+  const checkIsVision = (name: string) => {
+    const visionKeywords = ['vl', 'vision', 'llava', 'minicpm', 'moondream', 'gpt-4o', 'gpt-4-turbo', 'claude-3', 'gemini-1.5'];
+    return visionKeywords.some(key => name.toLowerCase().includes(key));
+  };
   const [showCommands, setShowCommands] = useState(false);
   const [filteredCmds, setFilteredCmds] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -626,20 +636,97 @@ export default function Home() {
   const handleSend = async () => {
     if (!input.trim()) return;
 
-    const userMessage: Message = {
+    // Aggressive compression for vision artifacts
+    const compressImage = (base64Str: string): Promise<{ data: string, size: number }> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.src = base64Str;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1600; // Restore high-res but stay under 1MB limit
+          const MAX_HEIGHT = 1600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = "#FFFFFF"; 
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+          }
+          
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8); // 80% High quality
+          resolve({ 
+            data: compressedBase64, 
+            size: Math.round(compressedBase64.length / 1024) 
+          });
+        };
+      });
+    };
+
+    let processedImageData = selectedImage;
+    let physicalPath = '';
+
+    if (processedImageData) {
+      // 1. Pre-calculate path (Defaulting to Host style which is most common for CLI model)
+      const filename = `ui_upload_${Date.now()}.jpg`;
+      physicalPath = `~/.hermes/uploads/${filename}`;
+      
+      addLog(`SYSTEM :: Pre-binding path: ${physicalPath}`);
+
+      addLog('SYSTEM :: Persisting vision artifact...');
+      try {
+        const result = await compressImage(processedImageData);
+        processedImageData = result.data;
+
+        fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: processedImageData, filename: filename })
+        }).then(res => {
+          addLog(`DEBUG :: Upload status: ${res.status}`);
+          return res.json();
+        }).then(data => {
+          if (data.success) addLog(`SUCCESS :: Physical storage confirmed: ${data.path}`);
+          else addLog(`ERROR :: Persistence failed: ${data.error}`);
+        }).catch(e => addLog(`CRITICAL :: Bridge error: ${e.message}`));
+
+      } catch (err: any) {
+        addLog(`CRITICAL :: Compression error: ${err.message}`);
+      }
+    }
+
+    const userMessageDetail: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: input,
+      content: physicalPath 
+        ? `[Attached Image: ${physicalPath}]\n\n${input}` 
+        : input,
+      image: processedImageData || selectedImage,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setHistory(prev => [input, ...prev.slice(0, 49)]); // Save to history
+    setMessages(prev => [...prev, userMessageDetail]);
+    setHistory(prev => [input, ...prev.slice(0, 49)]);
     setHistoryIdx(-1);
     setInput('');
+    setSelectedImage(null);
     setIsTyping(true);
 
-    // Handle Commands
     if (input.startsWith('/')) {
       const cmd = input.trim().split(' ')[0].toLowerCase();
       addLog(`[COMMAND] >> EXECUTING: ${cmd.toUpperCase()}`);
@@ -652,16 +739,44 @@ export default function Home() {
       }
     }
 
-    // Use the central gateway for all requests to avoid CORS issues with direct IPs
-    // The gateway will handle routing based on the model name and its local config
     const finalUrl = `${gatewayUrl}/v1/chat/completions`;
 
-    addLog(`USER >> Requesting completion for: "${input.substring(0, 20)}${input.length > 20 ? '...' : ''}"`);
+    addLog(`USER >> Requesting completion ${userMessageDetail.image ? '(Vision Enabled)' : ''}: "${input.substring(0, 20)}${input.length > 20 ? '...' : ''}"`);
     addLog(`DEBUG :: Dispatched Neural Target -> [${activeModel}]`);
     addLog(`SYSTEM :: Routing via Gateway: ${gatewayUrl}`);
     addLog(`AGENT_HERMES :: Initiating neural session...`);
 
     try {
+      const formattedMessages = [...messages, userMessageDetail].map(m => {
+        if (m.image) {
+          // Find the path string in the content if it exists
+          const pathMatch = m.content.match(/\[Attached Image: (.*?)\]/);
+          const currentPath = pathMatch ? pathMatch[1] : '';
+
+          if (currentPath) {
+            return {
+              role: m.role === 'agent' ? 'assistant' : 'user',
+              content: [
+                { type: 'text', text: m.content },
+                { 
+                  type: 'image_url', 
+                  image_url: { url: `file://${currentPath}` } // Mimic local file mount
+                }
+              ]
+            };
+          }
+        }
+        return {
+          role: m.role === 'agent' ? 'assistant' : 'user',
+          content: m.content
+        };
+      });
+
+      if (userMessageDetail.image) {
+        const hash = userMessageDetail.image.substring(userMessageDetail.image.length - 20);
+        addLog(`DEBUG :: Multi-modal payload sequence checksum: ...${hash}`);
+      }
+
       const response = await fetch(finalUrl, {
         method: 'POST',
         headers: {
@@ -669,13 +784,17 @@ export default function Home() {
         },
         body: JSON.stringify({
           model: activeModel || 'default',
-          messages: [...messages, userMessage].map(m => ({
-            role: m.role === 'agent' ? 'assistant' : 'user',
-            content: m.content
-          })),
+          messages: formattedMessages,
+          // Root-level images array for "mounting" simulation
+          images: formattedMessages
+            .filter(m => m.images && m.images.length > 0)
+            .flatMap(m => m.images),
           stream: true
         })
       });
+      
+      const bodyPreview = JSON.stringify({ model: activeModel, stream: true });
+      addLog(`SYSTEM :: Request dispatched [Size: ${Math.round(JSON.stringify(formattedMessages).length / 1024)}KB]`);
 
       if (!response.ok) {
         throw new Error(`HTTP Error: ${response.status}`);
@@ -802,10 +921,23 @@ export default function Home() {
               </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {checkIsVision(activeModel) && (
+                  <span style={{ 
+                    fontSize: '9px', 
+                    padding: '1px 5px', 
+                    background: 'var(--primary)', 
+                    color: 'white', 
+                    borderRadius: '4px', 
+                    fontWeight: '900',
+                    letterSpacing: '0.05em'
+                  }}>
+                    VISION
+                  </span>
+                )}
                 <div style={{ fontSize: '13px', color: 'var(--secondary)', fontWeight: '800', letterSpacing: '0.02em', textShadow: '0 0 10px rgba(0, 243, 255, 0.3)' }}>{activeModel}</div>
-                <div style={{ fontSize: '7px', color: 'var(--text-dim)', fontWeight: '500', opacity: 0.8 }}>NEURAL_TARGET_ACTIVE</div>
               </div>
+              <div style={{ fontSize: '7px', color: 'var(--text-dim)', fontWeight: '500', opacity: 0.8 }}>NEURAL_TARGET_ACTIVE</div>
             </div>
           </div>
 
@@ -1802,6 +1934,19 @@ export default function Home() {
                                             <span style={{ fontSize: '14px', fontWeight: '700', color: isSelected ? 'var(--secondary)' : 'var(--foreground)' }}>
                                               {m.model_name}
                                             </span>
+                                            {checkIsVision(m.model_name) && (
+                                              <span style={{ 
+                                                fontSize: '9px', 
+                                                padding: '1px 6px', 
+                                                background: 'rgba(155, 77, 255, 0.1)', 
+                                                border: '1px solid var(--primary)',
+                                                color: 'var(--primary-light)', 
+                                                borderRadius: '4px', 
+                                                fontWeight: '800' 
+                                              }}>
+                                                VISION
+                                              </span>
+                                            )}
                                             {isSelected && (
                                               <span style={{ fontSize: '9px', padding: '2px 6px', borderRadius: '4px', background: 'var(--secondary)', color: 'var(--background)', fontWeight: '900' }}>
                                                 CORE MODEL
@@ -2025,6 +2170,74 @@ export default function Home() {
                   </button>
                 </div>
 
+                {/* VISUAL QUICK SETTINGS: Storage Management */}
+                <div className="glass-panel" style={{ 
+                  marginBottom: '20px', 
+                  padding: '16px 24px', 
+                  background: 'rgba(155, 77, 255, 0.05)',
+                  border: '1px solid rgba(155, 77, 255, 0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ padding: '8px', background: 'rgba(155, 77, 255, 0.15)', borderRadius: '8px' }}>
+                      <HardDrive size={18} color="var(--primary)" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--foreground)' }}>Upload Storage Retention</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>Maximum number of images to keep in local server</div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1, maxWidth: '400px', marginLeft: '40px' }}>
+                    <input 
+                      type="range"
+                      min="10"
+                      max="500"
+                      step="10"
+                      value={(() => {
+                        const match = configContent.match(/image_retention_limit:\s*(\d+)/);
+                        return match ? parseInt(match[1]) : 100;
+                      })()}
+                      onChange={(e) => {
+                        const newVal = e.target.value;
+                        const oldContent = configContent;
+                        let newContent = '';
+                        if (oldContent.includes('image_retention_limit:')) {
+                          newContent = oldContent.replace(/image_retention_limit:\s*\d+/, `image_retention_limit: ${newVal}`);
+                        } else if (oldContent.includes('storage:')) {
+                          newContent = oldContent.replace(/storage:\s*/, `storage:\n  image_retention_limit: ${newVal}\n`);
+                        } else {
+                          newContent = oldContent + `\nstorage:\n  image_retention_limit: ${newVal}\n`;
+                        }
+                        setConfigContent(newContent);
+                      }}
+                      style={{ 
+                        flex: 1,
+                        accentColor: 'var(--primary)',
+                        cursor: 'pointer'
+                      }}
+                    />
+                    <div style={{ 
+                      minWidth: '60px', 
+                      padding: '4px 10px', 
+                      background: 'var(--panel-bg)', 
+                      borderRadius: '6px',
+                      border: '1px solid var(--glass-border)',
+                      textAlign: 'center',
+                      fontSize: '13px',
+                      fontWeight: '700',
+                      color: 'var(--primary-light)'
+                    }}>
+                      {(() => {
+                        const match = configContent.match(/image_retention_limit:\s*(\d+)/);
+                        return match ? match[1] : '100';
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="glass-panel" style={{ flex: 1, overflow: 'hidden', display: 'flex', padding: '0' }}>
                   <textarea
                     value={configContent}
@@ -2183,9 +2396,30 @@ export default function Home() {
                                 fontSize: '14px',
                                 color: '#e5e7eb'
                               }}>
+                                {msg.image && (
+                                  <div className="mt-2 mb-2 flex flex-col justify-start">
+                                    <div className="relative group cursor-zoom-in">
+                                      <img 
+                                        src={msg.image} 
+                                        alt="Uploaded content" 
+                                        style={{ maxWidth: '240px', maxHeight: '320px', width: 'auto', height: 'auto' }}
+                                        className="rounded-lg border border-white/20 shadow-xl transition-all duration-200 hover:scale-[1.02] hover:border-white/40 object-contain flex-shrink-0"
+                                      />
+                                      <div className="absolute inset-0 rounded-lg ring-1 ring-inset ring-white/10" />
+                                    </div>
+                                  </div>
+                                )}
                                 <ReactMarkdown
                                   remarkPlugins={[remarkGfm]}
                                   components={{
+                                    p: ({ children }) => {
+                                      const text = String(children);
+                                      if (text.includes('[Attached Image:')) {
+                                        const cleanText = text.replace(/\[Attached Image:.*?\]\n?/, '').trim();
+                                        return cleanText ? <p className="mb-4 last:mb-0 leading-relaxed">{cleanText}</p> : null;
+                                      }
+                                      return <p className="mb-4 last:mb-0 leading-relaxed">{children}</p>;
+                                    },
                                     code({ node, inline, className, children, ...props }: any) {
                                       const match = /language-(\w+)/.exec(className || '');
                                       return !inline && match ? (
@@ -2294,10 +2528,97 @@ export default function Home() {
                       )}
                     </AnimatePresence>
 
-                    <div className="glass-panel" style={{ display: 'flex', gap: '12px', padding: '12px 20px', borderRadius: '12px', alignItems: 'center' }}>
-                      <input
-                        type="text"
-                        value={input}
+                      {/* IMAGE PREVIEW ZONE */}
+                      <AnimatePresence>
+                        {selectedImage && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                            style={{
+                              position: 'absolute',
+                              bottom: 'calc(100% + 12px)',
+                              left: '0',
+                              padding: '8px',
+                              background: 'rgba(20, 18, 25, 0.8)',
+                              backdropFilter: 'blur(10px)',
+                              border: '1px solid var(--primary)',
+                              borderRadius: '12px',
+                              zIndex: 10
+                            }}
+                          >
+                            <div style={{ position: 'relative' }}>
+                              <img 
+                                src={selectedImage} 
+                                alt="Preview" 
+                                style={{ height: '80px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }} 
+                              />
+                              <button
+                                onClick={() => setSelectedImage(null)}
+                                style={{
+                                  position: 'absolute',
+                                  top: '-8px',
+                                  right: '-8px',
+                                  width: '20px',
+                                  height: '20px',
+                                  borderRadius: '50%',
+                                  background: '#EF4444',
+                                  border: 'none',
+                                  color: 'white',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: 'pointer',
+                                  fontSize: '10px'
+                                }}
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <div className="glass-panel" style={{ display: 'flex', gap: '12px', padding: '12px 20px', borderRadius: '12px', alignItems: 'center' }}>
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          hidden
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setSelectedImage(reader.result as string);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          style={{
+                            background: selectedImage ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+                            border: 'none',
+                            color: selectedImage ? 'white' : 'var(--text-dim)',
+                            padding: '8px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          onMouseEnter={(e) => { if (!selectedImage) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+                          onMouseLeave={(e) => { if (!selectedImage) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                        >
+                          <ImageIcon size={18} />
+                        </button>
+
+                        <input
+                          type="text"
+                          value={input}
                         onChange={(e) => {
                           const val = e.target.value;
                           setInput(val);

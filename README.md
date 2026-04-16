@@ -23,10 +23,11 @@ A real-time, manifest-style editor for the `~/.hermes/config.yaml` file.
 - **Shadow Syncing**: Any change in the Model Hub UI is instantly reflected in the Config Center manifest, and vice versa.
 - **Auto-Backup**: Every save operation creates a `.bak` version of your configuration for safety.
 
-### 🕸️ Neural Chat & Logs
-- **Thought Streaming**: Watch the agent process logic in real-time.
-- **Kernel Stream**: Integrated real-time log viewer to monitor system heartbeats and gateway status.
-- **Glassmorphism UI**: High-density interface with interactive micro-animations and smooth transitions.
+### 🖼️ Vision & Storage Management
+High-performance visual analysis pipeline for multimodal models.
+- **Environment-Aware**: Automatically resolves and mounts image paths between Host and Docker environments for seamless model access.
+- **Auto-Purge (LRU)**: Intelligent storage management that keeps your disk clean by retaining only a specified number of recent images.
+- **Configurable Retention**: Control your storage footprint directly from the UI or YAML manifest.
 
 ---
 
@@ -83,8 +84,15 @@ docker-compose up -d --build
 ## 📂 Configuration
 Hermes Nexus acts as a bridge to your local environment. It primarily manages:
 - **`~/.hermes/config.yaml`**: The ground truth for all agentic and model settings.
-- **Port 3000**: Default WebUI access.
-- **Port 2024**: Default Hermes Gateway communication.
+- **`~/.hermes/uploads/`**: Local cache for vision-capable model analysis (auto-managed).
+
+### Storage Settings
+Manage your local image footprint by adjusting the retention limit:
+```yaml
+storage:
+  image_retention_limit: 100  # Automatically purge oldest images when limit is reached
+```
+This can be adjusted via the **Config Center** slider in the WebUI.
 
 ---
 
