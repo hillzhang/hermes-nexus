@@ -96,6 +96,27 @@ This can be adjusted via the **Config Center** slider in the WebUI.
 
 ---
 
+## 🧪 Capability Showcase (Test Cases)
+
+### 🖼️ Multimodal Vision
+*Verified on: `gemma-4-26b-a4b-it-4bit`*
+
+| Scenario | Input | AI Reasoning Output |
+| :--- | :--- | :--- |
+| **Local Image Analysis** | Attached Image (e.g., `panda.jpg`) | "The image contains a panda sitting on a bamboo branch..." |
+| **Path-Injected Inference** | `[Attached Image: ~/.hermes/uploads/...]` | The vision adapter extracts the physical path and performs direct local file inference. |
+
+*Steps to Reproduce:*
+1. Select **`gemma-4-26b-a4b-it-4bit`** as the active node in Model Hub.
+2. Upload an image via the Neural Chat interface.
+3. The UI automatically injects the physical mounting path into the message.
+4. The model parses the tag and analyzes the local file without cloud latency.
+
+### 🔧 Tool Execution (Draft)
+*Coming Soon: Dynamic CLI & File System Operations benchmarks.*
+
+---
+
 ## 🛠️ Tech Stack
 - **Framework**: [Next.js 15+](https://nextjs.org/) (App Router)
 - **Styling**: Vanilla CSS with Design Token Architecture
