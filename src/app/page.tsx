@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-  Bot, Database, Terminal, Search, Layers, Settings, Cpu, Network, Activity, History, FolderOpen, Plus, Send, User, Box, ShieldAlert, Shield, ShieldCheck, Lock, Server, Save, X, Globe, Zap, Sun, Moon, Copy, Check, ChevronDown, Trash2, Monitor, RefreshCw, HardDrive, Image as ImageIcon
+  Bot, Database, Terminal, Search, Layers, Settings, Cpu, Network, Activity, History, FolderOpen, Plus, Send, User, Box, ShieldAlert, Shield, ShieldCheck, Lock, Server, Save, X, Globe, Zap, Sun, Moon, Copy, Check, ChevronDown, Trash2, Monitor, RefreshCw, HardDrive, FileText, Image as ImageIcon
 } from "lucide-react";
 import styles from "./page.module.css";
 import { motion, AnimatePresence } from "framer-motion";
@@ -173,7 +173,10 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('chat');
   const [showConfig, setShowConfig] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [uploadFileName, setUploadFileName] = useState<string>('');
+  const [uploadFileType, setUploadFileType] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
 
   // Helper to detect if a model name likely supports vision
   const checkIsVision = (name: string) => {
@@ -678,35 +681,43 @@ export default function Home() {
       });
     };
 
-    let processedImageData = selectedImage;
+    let processedFileData = selectedImage;
     let physicalPath = '';
+    const isImage = uploadFileType?.startsWith('image/');
 
-    if (processedImageData) {
-      // 1. Pre-calculate path (Defaulting to Host style which is most common for CLI model)
-      const filename = `ui_upload_${Date.now()}.jpg`;
-      physicalPath = `~/.hermes/uploads/${filename}`;
+    if (processedFileData) {
+      // 1. Pre-calculate path
+      const currentFilename = uploadFileName || (isImage ? `ui_upload_${Date.now()}.jpg` : `ui_upload_${Date.now()}.txt`);
+      const sanitizedFilename = currentFilename.startsWith('ui_upload_') ? currentFilename : `ui_upload_${Date.now()}_${currentFilename}`;
+      physicalPath = `~/.hermes/uploads/${sanitizedFilename}`;
       
-      addLog(`SYSTEM :: Pre-binding path: ${physicalPath}`);
+      addLog(`SYSTEM :: Pre-binding physical path: ${physicalPath}`);
+      addLog(`SYSTEM :: Persisting ${isImage ? 'vision' : 'text'} artifact...`);
 
-      addLog('SYSTEM :: Persisting vision artifact...');
       try {
-        const result = await compressImage(processedImageData);
-        processedImageData = result.data;
+        let finalDataToUpload = processedFileData;
+        
+        // Only compress if it's an image
+        if (isImage) {
+          const result = await compressImage(processedFileData);
+          finalDataToUpload = result.data;
+        }
 
         fetch('/api/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: processedImageData, filename: filename })
-        }).then(res => {
-          addLog(`DEBUG :: Upload status: ${res.status}`);
-          return res.json();
-        }).then(data => {
+          body: JSON.stringify({ 
+            image: finalDataToUpload, 
+            filename: sanitizedFilename,
+            type: uploadFileType 
+          })
+        }).then(res => res.json()).then(data => {
           if (data.success) addLog(`SUCCESS :: Physical storage confirmed: ${data.path}`);
           else addLog(`ERROR :: Persistence failed: ${data.error}`);
         }).catch(e => addLog(`CRITICAL :: Bridge error: ${e.message}`));
 
       } catch (err: any) {
-        addLog(`CRITICAL :: Compression error: ${err.message}`);
+        addLog(`CRITICAL :: Processing error: ${err.message}`);
       }
     }
 
@@ -714,9 +725,9 @@ export default function Home() {
       id: Date.now().toString(),
       role: 'user',
       content: physicalPath 
-        ? `[Attached Image: ${physicalPath}]\n\n${input}` 
+        ? `${isImage ? '[Attached Image: ' : '[Attached File: '}${physicalPath}]\n\n${input}` 
         : input,
-      image: processedImageData || selectedImage,
+      image: isImage ? (processedFileData || selectedImage) : null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -725,6 +736,8 @@ export default function Home() {
     setHistoryIdx(-1);
     setInput('');
     setSelectedImage(null);
+    setUploadFileName('');
+    setUploadFileType('');
     setIsTyping(true);
 
     if (input.startsWith('/')) {
@@ -2168,9 +2181,7 @@ export default function Home() {
                   >
                     {isSavingConfig ? 'Saving...' : <><Save size={16} /> Save Changes</>}
                   </button>
-                </div>
-
-                {/* VISUAL QUICK SETTINGS: Storage Management */}
+                </di                 {/* VISUAL QUICK SETTINGS: Storage Management */}
                 <div className="glass-panel" style={{ 
                   marginBottom: '20px', 
                   padding: '16px 24px', 
@@ -2186,7 +2197,7 @@ export default function Home() {
                     </div>
                     <div>
                       <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--foreground)' }}>Upload Storage Retention</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>Maximum number of images to keep in local server</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>Maximum number of files (images/docs) to keep in local server</div>
                     </div>
                   </div>
                   
@@ -2197,19 +2208,21 @@ export default function Home() {
                       max="500"
                       step="10"
                       value={(() => {
-                        const match = configContent.match(/image_retention_limit:\s*(\d+)/);
+                        const match = configContent.match(/upload_retention_limit:\s*(\d+)/) || configContent.match(/image_retention_limit:\s*(\d+)/);
                         return match ? parseInt(match[1]) : 100;
                       })()}
                       onChange={(e) => {
                         const newVal = e.target.value;
-                        const oldContent = configContent;
-                        let newContent = '';
-                        if (oldContent.includes('image_retention_limit:')) {
-                          newContent = oldContent.replace(/image_retention_limit:\s*\d+/, `image_retention_limit: ${newVal}`);
-                        } else if (oldContent.includes('storage:')) {
-                          newContent = oldContent.replace(/storage:\s*/, `storage:\n  image_retention_limit: ${newVal}\n`);
+                        let newContent = configContent;
+                        // Support both keys during transition, but prefer upload_retention_limit
+                        if (newContent.includes('upload_retention_limit:')) {
+                          newContent = newContent.replace(/upload_retention_limit:\s*\d+/, `upload_retention_limit: ${newVal}`);
+                        } else if (newContent.includes('image_retention_limit:')) {
+                          newContent = newContent.replace(/image_retention_limit:\s*\d+/, `upload_retention_limit: ${newVal}`);
+                        } else if (newContent.includes('storage:')) {
+                          newContent = newContent.replace(/storage:\s*/, `storage:\n  upload_retention_limit: ${newVal}\n`);
                         } else {
-                          newContent = oldContent + `\nstorage:\n  image_retention_limit: ${newVal}\n`;
+                          newContent = newContent + `\nstorage:\n  upload_retention_limit: ${newVal}\n`;
                         }
                         setConfigContent(newContent);
                       }}
@@ -2231,12 +2244,13 @@ export default function Home() {
                       color: 'var(--primary-light)'
                     }}>
                       {(() => {
-                        const match = configContent.match(/image_retention_limit:\s*(\d+)/);
+                        const match = configContent.match(/upload_retention_limit:\s*(\d+)/) || configContent.match(/image_retention_limit:\s*(\d+)/);
                         return match ? match[1] : '100';
                       })()}
                     </div>
                   </div>
                 </div>
+iv>
 
                 <div className="glass-panel" style={{ flex: 1, overflow: 'hidden', display: 'flex', padding: '0' }}>
                   <textarea
@@ -2414,8 +2428,8 @@ export default function Home() {
                                   components={{
                                     p: ({ children }) => {
                                       const text = String(children);
-                                      if (text.includes('[Attached Image:')) {
-                                        const cleanText = text.replace(/\[Attached Image:.*?\]\n?/, '').trim();
+                                      if (text.includes('[Attached Image:') || text.includes('[Attached File:')) {
+                                        const cleanText = text.replace(/\[Attached (Image|File):.*?\]\n?/, '').trim();
                                         return cleanText ? <p className="mb-4 last:mb-0 leading-relaxed">{cleanText}</p> : null;
                                       }
                                       return <p className="mb-4 last:mb-0 leading-relaxed">{children}</p>;
@@ -2532,47 +2546,74 @@ export default function Home() {
                       <AnimatePresence>
                         {selectedImage && (
                           <motion.div
-                            initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                            style={{
-                              position: 'absolute',
-                              bottom: 'calc(100% + 12px)',
-                              left: '0',
-                              padding: '8px',
-                              background: 'rgba(20, 18, 25, 0.8)',
-                              backdropFilter: 'blur(10px)',
-                              border: '1px solid var(--primary)',
-                              borderRadius: '12px',
-                              zIndex: 10
-                            }}
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="absolute bottom-full left-0 mb-4 z-50 w-full"
                           >
-                            <div style={{ position: 'relative' }}>
-                              <img 
-                                src={selectedImage} 
-                                alt="Preview" 
-                                style={{ height: '80px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }} 
-                              />
-                              <button
-                                onClick={() => setSelectedImage(null)}
-                                style={{
-                                  position: 'absolute',
-                                  top: '-8px',
-                                  right: '-8px',
-                                  width: '20px',
-                                  height: '20px',
-                                  borderRadius: '50%',
-                                  background: '#EF4444',
-                                  border: 'none',
-                                  color: 'white',
+                            <div className="glass-panel" style={{ 
+                              padding: '10px 16px', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '12px',
+                              background: 'var(--panel-bg)',
+                              border: '1px solid rgba(155, 77, 255, 0.4)',
+                              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                              borderRadius: '12px',
+                              maxWidth: 'max-content'
+                            }}>
+                              {uploadFileType?.startsWith('image/') ? (
+                                <div style={{ position: 'relative', width: '56px', height: '56px' }}>
+                                  <img 
+                                    src={selectedImage} 
+                                    className="w-full h-full object-cover rounded-lg border border-white/10"
+                                    alt="Upload"
+                                  />
+                                </div>
+                              ) : (
+                                <div style={{ 
+                                  width: '48px', 
+                                  height: '48px', 
+                                  background: 'rgba(155, 77, 255, 0.1)', 
+                                  borderRadius: '8px',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
-                                  cursor: 'pointer',
-                                  fontSize: '10px'
+                                  border: '1px solid rgba(155, 77, 255, 0.2)'
+                                }}>
+                                  <FileText size={22} color="var(--primary)" />
+                                </div>
+                              )}
+                              
+                              <div style={{ minWidth: '120px', maxWidth: '240px' }}>
+                                <div style={{ fontSize: '10px', fontWeight: '800', color: 'var(--primary-light)', marginBottom: '1px', opacity: 0.8 }}>
+                                  {uploadFileType?.startsWith('image/') ? 'PHYSICAL_IMAGE_READY' : 'PHYSICAL_FILE_READY'}
+                                </div>
+                                <div style={{ fontSize: '13px', color: 'var(--foreground)', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {uploadFileName || 'attachment.txt'}
+                                </div>
+                              </div>
+
+                              <button 
+                                onClick={() => {
+                                  setSelectedImage(null);
+                                  setUploadFileName('');
+                                  setUploadFileType('');
                                 }}
+                                style={{ 
+                                  background: 'rgba(255,255,255,0.05)', 
+                                  border: 'none', 
+                                  color: 'rgba(255,255,255,0.5)', 
+                                  padding: '6px', 
+                                  borderRadius: '50%',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  marginLeft: '4px'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
+                                onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
                               >
-                                <X size={12} />
+                                <X size={14} />
                               </button>
                             </div>
                           </motion.div>
@@ -2580,6 +2621,7 @@ export default function Home() {
                       </AnimatePresence>
 
                       <div className="glass-panel" style={{ display: 'flex', gap: '12px', padding: '12px 20px', borderRadius: '12px', alignItems: 'center' }}>
+                        {/* Image Channel */}
                         <input
                           type="file"
                           ref={fileInputRef}
@@ -2588,6 +2630,8 @@ export default function Home() {
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
+                              setUploadFileName(file.name);
+                              setUploadFileType(file.type);
                               const reader = new FileReader();
                               reader.onloadend = () => {
                                 setSelectedImage(reader.result as string);
@@ -2596,25 +2640,72 @@ export default function Home() {
                             }
                           }}
                         />
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          style={{
-                            background: selectedImage ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
-                            border: 'none',
-                            color: selectedImage ? 'white' : 'var(--text-dim)',
-                            padding: '8px',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
+
+                        {/* Document Channel */}
+                        <input
+                          type="file"
+                          ref={documentInputRef}
+                          hidden
+                          accept=".txt,.md,.py,.json,.js,.tsx,.ts,.csv,.log,.yaml"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setUploadFileName(file.name);
+                              setUploadFileType(file.type || 'text/plain');
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setSelectedImage(reader.result as string);
+                              };
+                              reader.readAsDataURL(file);
+                            }
                           }}
-                          onMouseEnter={(e) => { if (!selectedImage) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
-                          onMouseLeave={(e) => { if (!selectedImage) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
-                        >
-                          <ImageIcon size={18} />
-                        </button>
+                        />
+
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            title="Upload Vision Frame"
+                            onClick={() => fileInputRef.current?.click()}
+                            style={{
+                              background: (selectedImage && uploadFileType?.startsWith('image/')) ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+                              border: 'none',
+                              color: (selectedImage && uploadFileType?.startsWith('image/')) ? 'white' : 'var(--text-dim)',
+                              padding: '8px',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxShadow: (selectedImage && uploadFileType?.startsWith('image/')) ? '0 0 15px var(--primary)' : 'none'
+                            }}
+                            onMouseEnter={(e) => { if (!selectedImage) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+                            onMouseLeave={(e) => { if (!selectedImage) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                          >
+                            <ImageIcon size={18} />
+                          </button>
+
+                          <button
+                            title="Analyze Code/Document"
+                            onClick={() => documentInputRef.current?.click()}
+                            style={{
+                              background: (selectedImage && !uploadFileType?.startsWith('image/')) ? '#2563EB' : 'rgba(255,255,255,0.05)',
+                              border: 'none',
+                              color: (selectedImage && !uploadFileType?.startsWith('image/')) ? 'white' : 'var(--text-dim)',
+                              padding: '8px',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxShadow: (selectedImage && !uploadFileType?.startsWith('image/')) ? '0 0 15px #2563EB' : 'none'
+                            }}
+                            onMouseEnter={(e) => { if (!selectedImage) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+                            onMouseLeave={(e) => { if (!selectedImage) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                          >
+                            <FileText size={18} />
+                          </button>
+                        </div>
 
                         <input
                           type="text"

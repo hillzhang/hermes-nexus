@@ -26,7 +26,7 @@ A real-time, manifest-style editor for the `~/.hermes/config.yaml` file.
 ### 🖼️ Vision & Storage Management
 High-performance visual analysis pipeline for multimodal models.
 - **Environment-Aware**: Automatically resolves and mounts image paths between Host and Docker environments for seamless model access.
-- **Auto-Purge (LRU)**: Intelligent storage management that keeps your disk clean by retaining only a specified number of recent images.
+- **Auto-Purge (LRU)**: Intelligent storage management that keeps your disk clean by retaining only a specified number of recent files (images/docs).
 - **Configurable Retention**: Control your storage footprint directly from the UI or YAML manifest.
 
 ---
@@ -87,10 +87,10 @@ Hermes Nexus acts as a bridge to your local environment. It primarily manages:
 - **`~/.hermes/uploads/`**: Local cache for vision-capable model analysis (auto-managed).
 
 ### Storage Settings
-Manage your local image footprint by adjusting the retention limit:
+Manage your local file footprint by adjusting the retention limit:
 ```yaml
 storage:
-  image_retention_limit: 100  # Automatically purge oldest images when limit is reached
+  upload_retention_limit: 100  # Automatically purge oldest files when limit is reached
 ```
 This can be adjusted via the **Config Center** slider in the WebUI.
 
