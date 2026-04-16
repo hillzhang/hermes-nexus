@@ -9,11 +9,11 @@ services:
     ports:
       - "3001:3000"
     volumes:
-      # 挂载宿主机的配置文件目录到容器
-      # 请确保将左侧路径修改为您真实的 ~/.hermes 物理路径
+      # Mount host configuration directory to the container
+      # Please ensure the left path matches your local ~/.hermes directory
       - ~/.hermes:/data
     environment:
-      # 告诉 UI 访问容器内挂载的路径
+      # Instruct the UI to access the mounted config path inside the container
       - HERMES_CONFIG_PATH=/data/config.yaml
       - NODE_ENV=production
     restart: always
