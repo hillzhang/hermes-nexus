@@ -2181,7 +2181,8 @@ export default function Home() {
                   >
                     {isSavingConfig ? 'Saving...' : <><Save size={16} /> Save Changes</>}
                   </button>
-                </di                 {/* VISUAL QUICK SETTINGS: Storage Management */}
+                </div>
+                {/* VISUAL QUICK SETTINGS: Storage Management */}
                 <div className="glass-panel" style={{ 
                   marginBottom: '20px', 
                   padding: '16px 24px', 
@@ -2250,7 +2251,7 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-iv>
+
 
                 <div className="glass-panel" style={{ flex: 1, overflow: 'hidden', display: 'flex', padding: '0' }}>
                   <textarea
