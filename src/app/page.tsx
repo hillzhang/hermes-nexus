@@ -22,6 +22,7 @@ interface Message {
   timestamp: string;
   model?: string;
   image?: string | null;
+  file?: string | null;
 }
 
 const FINAL_NODES: Node[] = [
@@ -728,6 +729,7 @@ export default function Home() {
         ? `${isImage ? '[Attached Image: ' : '[Attached File: '}${physicalPath}]\n\n${input}` 
         : input,
       image: isImage ? (processedFileData || selectedImage) : null,
+      file: isImage ? null : (uploadFileName || 'attachment.txt'),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -2422,6 +2424,26 @@ export default function Home() {
                                       />
                                       <div className="absolute inset-0 rounded-lg ring-1 ring-inset ring-white/10" />
                                     </div>
+                                  </div>
+                                )}
+
+                                {msg.file && (
+                                  <div style={{ 
+                                    marginBottom: '10px', 
+                                    padding: '8px 12px', 
+                                    background: 'rgba(155, 77, 255, 0.1)', 
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    border: '1px solid rgba(155, 77, 255, 0.2)',
+                                    maxWidth: 'max-content',
+                                    marginTop: '4px'
+                                  }}>
+                                    <FileText size={16} color="var(--primary-light)" />
+                                    <span style={{ fontSize: '13px', color: 'var(--foreground)', fontWeight: '500' }}>
+                                      {msg.file}
+                                    </span>
                                   </div>
                                 )}
                                 <ReactMarkdown
