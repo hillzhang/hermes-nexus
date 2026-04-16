@@ -112,6 +112,23 @@ This can be adjusted via the **Config Center** slider in the WebUI.
 3. The UI automatically injects the physical mounting path into the message.
 4. The model parses the tag and analyzes the local file without cloud latency.
 
+### 📄 Document & Code Analysis
+Unlock deep reasoning over local artifacts without manual copy-pasting.
+
+| Case Type | Target Model | Artifact Type | Prompt Example |
+| :--- | :--- | :--- | :--- |
+| **Logic Audit** | `gemma-4-26b` | `main.py` | "Analyze the concurrency safety of this script." |
+| **Data Extraction** | `hermes-3-70b` | `data.json` | "Summarize the hierarchical structure of this config." |
+| **Log Diagnosis** | `qwen-2.5-coder` | `error.log` | "Find the root cause of the timeout in line 42." |
+
+**Workflow**:
+1. Select the **Document Icon** (Blue) in the Neural Bridge.
+2. Upload your source file or log.
+3. The system injects a physical path `[Attached File: ~/.hermes/uploads/...]`.
+4. The Agent reads the local file directly and provides reasoning.
+
+---
+
 ### 🔧 Tool Execution (Draft)
 *Coming Soon: Dynamic CLI & File System Operations benchmarks.*
 
