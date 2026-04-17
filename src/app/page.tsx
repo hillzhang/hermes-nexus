@@ -738,7 +738,7 @@ export default function Home() {
         ? `${isImage ? '[Attached Image: ' : '[Attached File: '}${physicalPath}]\n\n${input}` 
         : input,
       image: isImage ? (processedFileData || selectedImage) : null,
-      file: isImage ? null : (uploadFileName || 'attachment.txt'),
+      file: (processedFileData && !isImage) ? (uploadFileName || 'attachment.txt') : null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 

@@ -1,7 +1,7 @@
-# 🏛️ Hermes Nexus
-> **Next-Gen Neural Command Nexus for Autonomous Intelligence**
+# 🏛️ Hermes Nexus Web UI
+> **The High-Performance Web Interface for the Hermes AI Ecosystem**
 
-**Hermes Nexus** is a premium, high-observability operation center designed for the **Hermes Agent** ecosystem. It transforms complex agentic workflows into a sleek, futuristic hub, providing developers with absolute command over their local neural models and agent behavior.
+**Hermes Nexus** is a premium, high-observability **Web UI** and operation center designed for the **Hermes Agent** ecosystem. It transforms complex agentic workflows into a sleek, futuristic hub, providing developers with absolute command over their local neural models and agent behavior.
 
 ![AESTHETICS](https://img.shields.io/badge/Aesthetics-Premium-9b4dff)
 ![TECH](https://img.shields.io/badge/Stack-Next.js%20|%20Framer%20Motion-blue)
@@ -28,6 +28,26 @@ High-performance visual analysis pipeline for multimodal models.
 - **Environment-Aware**: Automatically resolves and mounts image paths between Host and Docker environments for seamless model access.
 - **Auto-Purge (LRU)**: Intelligent storage management that keeps your disk clean by retaining only a specified number of recent files (images/docs).
 - **Configurable Retention**: Control your storage footprint directly from the UI or YAML manifest.
+
+---
+
+## 🖥️ Web UI Interface
+
+### 💬 Neural Chat Experience
+Experience real-time stream generation with premium typography and smooth auto-scroll.
+<img src="public/ui/chat.png" width="800" alt="Chat UI" />
+
+### 🧠 Model Command Center
+Hot-swap models and manage your provider fleet with high-density system metrics.
+<img src="public/ui/model.png" width="800" alt="Model Hub" />
+
+### 📂 Session & Artifact Vault
+Deep history management with instant session re-linking and multimodal attachment support.
+<img src="public/ui/sessions.png" width="800" alt="Sessions" />
+
+### 🛠️ Neural Skills Library
+Intelligent command discovery and automated skill orchestration for autonomous workflows.
+<img src="public/ui/skills.png" width="800" alt="Skills" />
 
 ---
 
