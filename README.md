@@ -1,7 +1,7 @@
 # 🏛️ Hermes Nexus Web UI
-> **The High-Performance Web Interface for the Hermes AI Ecosystem**
+> **The High-Performance Web Interface for the [Hermes Agent](https://github.com/nousresearch/hermes-agent)**
 
-**Hermes Nexus** is a premium, high-observability **Web UI** and operation center designed for the **Hermes Agent** ecosystem. It transforms complex agentic workflows into a sleek, futuristic hub, providing developers with absolute command over their local neural models and agent behavior.
+**Hermes Nexus** is a premium, high-observability **Web UI** and operation center designed for the **[Hermes Agent](https://github.com/nousresearch/hermes-agent)** ecosystem. It transforms complex agentic workflows into a sleek, futuristic hub, providing developers with absolute command over their local neural models and agent behavior.
 
 ![AESTHETICS](https://img.shields.io/badge/Aesthetics-Premium-9b4dff)
 ![TECH](https://img.shields.io/badge/Stack-Next.js%20|%20Framer%20Motion-blue)
@@ -74,7 +74,8 @@ platforms:
 
 ## 🚀 Deployment Options
 
-### Manual Local Setup
+### 1. Manual Local Setup
+Ideal for rapid UI customization and local experimentation.
 ```bash
 # Clone & Enter
 git clone https://github.com/hillzhang/hermes-ui.git
@@ -87,17 +88,43 @@ npm install
 npm run dev
 ```
 
-### 🐳 Docker Deployment (Recommended)
+### 2. Standard Docker Deployment (Recommended)
 The most isolated and robust way to run Hermes UI with persistent host configuration.
 
 ```bash
-# One-liner to pull and run
+# One-liner to pull and run via Compose
 docker-compose up -d --build
 ```
 
 **Persistence Logic:**
 - The container maps your host's `~/.hermes` directory to its internal logic.
 - Managed via `HERMES_CONFIG_PATH` environment variable in `docker-compose.yml`.
+
+### 3. Integrated All-in-One (Backend + UI)
+This is the **zero-configuration** method. It builds both the [Hermes Agent](https://github.com/nousresearch/hermes-agent) backend and this Web UI into a single high-performance image.
+
+**Features:**
+- **Auto-Sync (Named Volumes)**: The container automatically seeds your persistent volume with the **Core Skills Library** and a default configuration on its first run.
+- **Embedded Gateway**: The backend server runs internally, synchronized with the UI.
+- **Single Port Access**: Expose port 3000 for the full experience.
+
+**Build All-in-One:**
+```bash
+docker build -t hermes-nexus-allinone -f Dockerfile.allinone .
+```
+
+> [!NOTE]
+> **All-in-One Efficiency**: Unlike the standard UI, this mode includes a pre-compiled version of the **Hermes Agent** kernel inside. It is perfect for users who want a single-command deployment without installing Python locally. It also features **Reverse-Mapping**, which automatically seeds your host volume with all built-in skills on the first launch.
+
+**Run All-in-One (Persistent):**
+```bash
+# Docker will automatically create and populate 'hermes_data' volume
+docker run -d \
+  -p 3000:3000 \
+  -v hermes_data:/data \
+  --name hermes-nexus \
+  hermes-nexus-allinone
+```
 
 ---
 

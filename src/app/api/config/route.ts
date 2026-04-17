@@ -3,7 +3,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 
-const CONFIG_PATH = process.env.HERMES_CONFIG_PATH || path.join(os.homedir(), '.hermes', 'config.yaml');
+const hermesHome = process.env.HERMES_HOME || path.join(os.homedir(), '.hermes');
+const CONFIG_PATH = process.env.HERMES_CONFIG_PATH || path.join(hermesHome, 'config.yaml');
 
 export async function GET() {
   try {

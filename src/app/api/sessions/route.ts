@@ -8,8 +8,8 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    const home = os.homedir();
-    const sessionsDir = path.join(home, '.hermes', 'sessions');
+    const hermesHome = process.env.HERMES_HOME || path.join(os.homedir(), '.hermes');
+    const sessionsDir = path.join(hermesHome, 'sessions');
 
     if (!fs.existsSync(sessionsDir)) {
       return NextResponse.json([]);
@@ -73,8 +73,8 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
     const ids = searchParams.get('ids');
 
-    const home = os.homedir();
-    const sessionsDir = path.join(home, '.hermes', 'sessions');
+    const hermesHome = process.env.HERMES_HOME || path.join(os.homedir(), '.hermes');
+    const sessionsDir = path.join(hermesHome, 'sessions');
 
     if (!fs.existsSync(sessionsDir)) {
       return NextResponse.json({ error: 'NotFound' }, { status: 404 });

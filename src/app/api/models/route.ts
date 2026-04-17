@@ -3,7 +3,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 
-const CONFIG_PATH = process.env.HERMES_CONFIG_PATH || path.join(os.homedir(), '.hermes', 'config.yaml');
+const hermesHome = process.env.HERMES_HOME || path.join(os.homedir(), '.hermes');
+const CONFIG_PATH = process.env.HERMES_CONFIG_PATH || path.join(hermesHome, 'config.yaml');
 
 function manualParse(yaml: string) {
   const lines = yaml.split('\n');
@@ -326,10 +327,10 @@ export async function POST(req: Request) {
       // 4. Force Gateway Restart (Hot-Reload)
       try {
         const { exec } = require('child_process');
-        const hermesPath = path.join(os.homedir(), '.local', 'bin', 'hermes');
-        const pythonPath = path.join(os.homedir(), '.hermes', 'hermes-agent', 'venv', 'bin', 'python3');
+        const hermesPath = process.env.HERMES_BIN_PATH || 'hermes';
+        const pythonPath = process.env.PYTHON_BIN_PATH || 'python3';
 
-        exec(`${pythonPath} ${hermesPath} gateway run --replace`, (error: any) => {
+        exec(`${pythonPath} -m hermes gateway run --replace`, (error: any) => {
           if (error) console.error('Gateway restart failed:', error);
         });
       } catch (e) {

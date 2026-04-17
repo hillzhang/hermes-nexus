@@ -5,17 +5,18 @@ import os from 'os';
 
 export async function GET() {
   try {
-    const skillsPath = path.join(os.homedir(), '.hermes', 'skills');
+    const hermesHome = process.env.HERMES_HOME || path.join(os.homedir(), '.hermes');
+    const skillsPath = path.join(hermesHome, 'skills');
     const level1Entries = await fs.readdir(skillsPath, { withFileTypes: true });
-    
+
     const skillsList: any[] = [];
 
     for (const e1 of level1Entries) {
       if (!e1.isDirectory() || e1.name.startsWith('.')) continue;
-      
+
       const p1 = path.join(skillsPath, e1.name);
       const level2Entries = await fs.readdir(p1, { withFileTypes: true });
-      
+
       const subDirs = level2Entries.filter(e2 => e2.isDirectory() && !e2.name.startsWith('.'));
 
       const parseSkill = async (name: string, dir: string, category: string) => {
@@ -28,8 +29,8 @@ export async function GET() {
             const content = await fs.readFile(path.join(dir, metaFile), 'utf-8');
             description = content.split('\n').find(line => line.trim().length > 0 && !line.startsWith('#')) || description;
           }
-        } catch (e) {}
-        
+        } catch (e) { }
+
         return {
           name: name, // Preserve original kebab-case
           rawName: name,

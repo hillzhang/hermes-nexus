@@ -1,0 +1,62 @@
+# ==========================================
+# Phase 1: Build Web UI
+# ==========================================
+FROM node:20-alpine AS ui-builder
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm install
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED 1
+RUN npm run build
+
+# ==========================================
+# Phase 2: Integrated Runtime (AIO)
+# ==========================================
+FROM python:3.11-slim AS runner
+
+# 1. Install necessary system utilities
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    bash \
+    procps \
+    ffmpeg \
+    ripgrep \
+    xz-utils \
+    ca-certificates \
+    build-essential \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 2. Environment Configuration
+ENV UV_SYSTEM_PYTHON=1
+ENV HERMES_HOME="/data"
+ENV HERMES_CONFIG_PATH="/data/config.yaml"
+ENV PATH="/root/.local/bin:$PATH"
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# 3. Pull & Install Hermes Agent via Official Script
+RUN curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | \
+    bash -s -- --no-venv --skip-setup --dir /app/agent --hermes-home /data
+
+# 4. Integrate Web UI Standalone
+RUN mkdir -p /app/ui
+COPY --from=ui-builder /app/public /app/ui/public
+COPY --from=ui-builder /app/.next/standalone /app/ui/
+COPY --from=ui-builder /app/.next/static /app/ui/.next/static
+
+# 5. Persistence Setup (Method 1: Named Volumes)
+VOLUME ["/data"]
+EXPOSE 3000 8642
+
+# 6. Launch Orchestration
+CMD if [ ! -f /data/config.yaml ]; then \
+    echo "SYSTEM :: Generating initial config in the volume..." && \
+    printf "storage:\n  base_path: /data\nserver:\n  host: 0.0.0.0\n  port: 8642\n" > /data/config.yaml; \
+    fi && \
+    hermes gateway run & \
+    cd /app/ui && node server.js

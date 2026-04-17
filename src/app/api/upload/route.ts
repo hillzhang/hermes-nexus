@@ -10,9 +10,10 @@ export async function POST(req: NextRequest) {
     if (!image) return NextResponse.json({ error: 'No file data' }, { status: 400 });
 
     // 1. Determine persistent data path
-    const configPath = process.env.HERMES_CONFIG_PATH || path.join(os.homedir(), '.hermes', 'config.yaml');
+    const hermesHome = process.env.HERMES_HOME || path.join(os.homedir(), '.hermes');
+    const configPath = process.env.HERMES_CONFIG_PATH || path.join(hermesHome, 'config.yaml');
     const baseDir = path.dirname(configPath);
-    const uploadDir = path.join(baseDir, 'uploads');
+    const uploadDir = path.join(hermesHome, 'uploads');
 
     // 2. Ensure directory exists
     if (!fs.existsSync(uploadDir)) {
@@ -75,9 +76,11 @@ export async function POST(req: NextRequest) {
 
     // 5. Path Resolution
     let finalPath = '';
-    if (process.env.HERMES_CONFIG_PATH && process.env.HERMES_CONFIG_PATH.startsWith('/data')) {
-      finalPath = filePath.replace(baseDir, '/data');
+    const isDocker = process.env.HERMES_HOME === '/data';
+    if (isDocker) {
+      finalPath = path.join('/data', 'uploads', safeFilename);
     } else {
+      // In local mode, we prefer returning path relative to home to be safe across diff OS
       finalPath = `~/.hermes/uploads/${safeFilename}`;
     }
 
